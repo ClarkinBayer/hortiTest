@@ -1,0 +1,489 @@
+name: Hortiview Infrastructure
+
+on:
+  # pull_request:
+  #   branches:
+  #     - main
+  #   types:
+  #     - closed
+  workflow_dispatch:
+    inputs:
+      run_test:
+        description: "Decides whether to run demo or not"
+        required: false
+        default: "false"
+      # run_prod:
+      #   description: "Decides whether to run production or not"
+      #   required: false
+      #   default: "false"
+      # run_stag:
+      #   description: "Decides whether to run staging or not"
+      #   required: false
+      #   default: "false"
+      # run_devbox:
+      #   description: "Decides whether to run devbox or not"
+      #   required: false
+      #   default: "false"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ARTIFACT_DIRECTORY: "infrastructure"
+  ARTIFACT_NAME: "Hortiview-Infrastructure-Build-${{ github.run_number }}-artifact"
+  AZURE_REGION: "westeurope"
+  BICEP_TEMPLATE_PATH: "main.bicep"
+  LOCATION_SHORTCUT: "weu"
+  # CLI_JSON_UPDATE_SCRIPT_PATH: "azurecli/update-json-parameter.sh"
+  # CLI_INSTANCE_SCRIPT_PATH: "azurecli/create-instance-base.sh"
+  # CLI_KEYCLOAK_APP_PATH: "azurecli/setup-keycloak-app.sh"
+  # PASSWORD_SECRET_LIST: "postgreFlexPwd,landingPagePassword"
+  # KEYCLOAK_COMPOSE_SCRIPT_PATH: "yaml/keycloak-docker-compose.yml"
+  TEST_DEPLOYMENT_NAME: "Hortiview-Infra-Test-${{ github.run_number }}"
+  # DEMO_DEPLOYMENT_NAME: "Hortiview-Infra-Demo-${{ github.run_number }}"
+  # PROD_DEPLOYMENT_NAME: "Hortiview-Infra-Prod-${{ github.run_number }}"
+  # DEVBOX_DEPLOYMENT_NAME: "Hortiview-Infra-Devbox-${{ github.run_number }}"
+  # STAG_DEPLOYMENT_NAME: "Hortiview-Infra-Stag-${{ github.run_number }}"
+
+jobs:
+  build:
+    runs-on: [self-hosted, Linux, external-k8s]
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Publish Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: "${{ env.ARTIFACT_DIRECTORY }}/"
+
+  deploy-to-test:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_test == 'true' }}
+    environment: test
+    needs: [build]
+    runs-on: [self-hosted, linux, external-k8s]
+    env:
+      BICEP_PARAMTERS_PATH: "environments/main-test.json"
+      ENVIRONMENT: "tes"
+      PROJECT_NAME: "hv"
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_NAME }}
+
+      - name: Az CLI login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID}}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID}}
+
+      # - name: Bash - Set executable permissions to shell script
+      #   run: |
+      #     chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_JSON_UPDATE_SCRIPT_PATH }}
+      #     chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+      #     chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_KEYCLOAK_APP_PATH }}
+
+      # - name: Bash - Create Instance Base by Azure CLI
+      #   run: |
+      #     ./${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+      #   env:
+      #     PROJECT_NAME: ${{ env.PROJECT_NAME }}
+      #     AZURE_REGION: ${{ env.AZURE_REGION }}
+      #     LOCATION_SHORTCUT: ${{ env.LOCATION_SHORTCUT }}
+      #     ENVIRONMENT: ${{ env.ENVIRONMENT }}
+      #     PASSWORD_SECRET_LIST: ${{ env.PASSWORD_SECRET_LIST }}
+
+      # - name: Bash - Install yq
+      #   run: |
+      #     sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.12.0/yq_linux_amd64
+      #     sudo chmod +x /usr/local/bin/yq
+
+      - name: Bicep - Template Validation
+        uses: azure/arm-deploy@v1
+        with:
+          scope: subscription
+          subscriptionId: ${{ secrets.HORTIVIEW_SUBSCRIPTIONID }}
+          region: ${{ env.AZURE_REGION }}
+          template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+          parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+          deploymentMode: Validate
+          deploymentName: ${{ env.TEST_DEPLOYMENT_NAME }}
+          failOnStdErr: false
+
+      - name: Bicep - Template Deployment
+        uses: azure/arm-deploy@v1
+        with:
+          scope: subscription
+          subscriptionId: ${{ secrets.HORTIVIEW_SUBSCRIPTIONID }}
+          region: ${{ env.AZURE_REGION }}
+          template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+          parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+          deploymentMode: Incremental
+          deploymentName: ${{ env.TEST_DEPLOYMENT_NAME }}
+          failOnStdErr: false
+
+      # - name: Bash - Add App Settings
+      #   run: |
+      #     # Setting up global parameters
+      #     resource_group_name=$(printf "rg-%s-c-infra-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+      #     key_vault_name=$(printf "kv-%s-c-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+
+      #     # Get Key Vault URI
+      #     key_vault_uri=$(az keyvault show --name "$key_vault_name" --resource-group "$resource_group_name" --query properties.vaultUri -o tsv)
+
+      #     # Fetch all App Services in the specified resource group
+      #     app_services=$(az webapp list --resource-group "$resource_group_name" --query '[].name' --output tsv)
+
+      #     # Iterate over each App Service and set the specific environment variable
+      #     for app_service in ${app_services[@]}
+      #     do
+      #         az webapp config appsettings set --name "$app_service" --resource-group "$resource_group_name" --settings CodeBasedAppAuthentication="true" AzureKeyVaultUrl="$key_vault_uri" UseLocalAppsettings="false" ASPNETCORE_ENVIRONMENT="Development"
+      #     done
+
+  # deploy-to-demo:
+  #   if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_demo == 'true' }}
+  #   environment: demo
+  #   needs: [build]
+  #   runs-on: [self-hosted, linux, external-k8s]
+  #   env:
+  #     BICEP_PARAMTERS_PATH: "environments/main-demo.json"
+  #     ENVIRONMENT: "dem"
+  #     PROJECT_NAME: "hv"
+  #   steps:
+  #     - name: Download Artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: ${{ env.ARTIFACT_NAME }}
+  #         path: ${{ env.ARTIFACT_NAME }}
+
+  #     - name: Az CLI login
+  #       uses: azure/login@v1
+  #       with:
+  #         client-id: ${{ secrets.HORTIVIEW_PLATFORM_CLIENTID }}
+  #         tenant-id: ${{ secrets.HORTIVIEW_TENANTID }}
+  #         subscription-id: ${{ secrets.HORTIVIEW_SUBSCRIPTIONID }}
+
+  #     - name: Bash - Set executable permissions to shell script
+  #       run: |
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_JSON_UPDATE_SCRIPT_PATH }}
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_KEYCLOAK_APP_PATH }}
+
+  #     - name: Bash - Create Instance Base by Azure CLI
+  #       run: |
+  #         ./${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+  #       env:
+  #         PROJECT_NAME: ${{ env.PROJECT_NAME }}
+  #         AZURE_REGION: ${{ env.AZURE_REGION }}
+  #         LOCATION_SHORTCUT: ${{ env.LOCATION_SHORTCUT }}
+  #         ENVIRONMENT: ${{ env.ENVIRONMENT }}
+  #         PASSWORD_SECRET_LIST: ${{ env.PASSWORD_SECRET_LIST }}
+
+  #     - name: Bash - Install yq
+  #       run: |
+  #         sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.12.0/yq_linux_amd64
+  #         sudo chmod +x /usr/local/bin/yq
+
+  #     - name: Bicep - Template Validation
+  #       uses: azure/arm-deploy@v1
+  #       with:
+  #         scope: subscription
+  #         subscriptionId: ${{ secrets.HORTIVIEW_SUBSCRIPTIONID }}
+  #         region: ${{ env.AZURE_REGION }}
+  #         template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+  #         parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+  #         deploymentMode: Validate
+  #         deploymentName: ${{ env.DEMO_DEPLOYMENT_NAME }}
+  #         failOnStdErr: false
+
+  #     - name: Bicep - Template Deployment
+  #       uses: azure/arm-deploy@v1
+  #       with:
+  #         scope: subscription
+  #         subscriptionId: ${{ secrets.HORTIVIEW_SUBSCRIPTIONID }}
+  #         region: ${{ env.AZURE_REGION }}
+  #         template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+  #         parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+  #         deploymentMode: Incremental
+  #         deploymentName: ${{ env.DEMO_DEPLOYMENT_NAME }}
+  #         failOnStdErr: false
+
+  #     - name: Bash - Add App Settings
+  #       run: |
+  #         # Setting up global parameters
+  #         resource_group_name=$(printf "rg-%s-c-infra-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+  #         key_vault_name=$(printf "kv-%s-c-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+
+  #         # Get Key Vault URI
+  #         key_vault_uri=$(az keyvault show --name "$key_vault_name" --resource-group "$resource_group_name" --query properties.vaultUri -o tsv)
+
+  #         # Fetch all App Services in the specified resource group
+  #         app_services=$(az webapp list --resource-group "$resource_group_name" --query '[].name' --output tsv)
+
+  #         # Iterate over each App Service and set the specific environment variable
+  #         for app_service in ${app_services[@]}
+  #         do
+  #             az webapp config appsettings set --name "$app_service" --resource-group "$resource_group_name" --settings CodeBasedAppAuthentication="true" AzureKeyVaultUrl="$key_vault_uri" UseLocalAppsettings="false" ASPNETCORE_ENVIRONMENT="Staging"
+  #         done
+
+  # deploy-to-prod:
+  #   if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_prod == 'true' }}
+  #   environment: prod
+  #   needs: [build]
+  #   runs-on: [self-hosted, linux, external-k8s]
+  #   env:
+  #     BICEP_PARAMTERS_PATH: "environments/main-prod.json"
+  #     ENVIRONMENT: "prod"
+  #     PROJECT_NAME: "hv"
+  #   steps:
+  #     - name: Download Artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: ${{ env.ARTIFACT_NAME }}
+  #         path: ${{ env.ARTIFACT_NAME }}
+
+  #     - name: Az CLI login
+  #       uses: azure/login@v1
+  #       with:
+  #         client-id: ${{ secrets.HORTIVIEW_PLATFORM_PRODUCTION_CLIENTID }}
+  #         tenant-id: ${{ secrets.HORTIVIEW_TENANTID }}
+  #         subscription-id: ${{ secrets.HORTIVIEW_PRODUCTION_SUBSCRIPTIONID }}
+
+  #     - name: Bash - Set executable permissions to shell script
+  #       run: |
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_JSON_UPDATE_SCRIPT_PATH }}
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_KEYCLOAK_APP_PATH }}
+
+  #     - name: Bash - Create Instance Base by Azure CLI
+  #       run: |
+  #         ./${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+  #       env:
+  #         PROJECT_NAME: ${{ env.PROJECT_NAME }}
+  #         AZURE_REGION: ${{ env.AZURE_REGION }}
+  #         LOCATION_SHORTCUT: ${{ env.LOCATION_SHORTCUT }}
+  #         ENVIRONMENT: ${{ env.ENVIRONMENT }}
+  #         PASSWORD_SECRET_LIST: ${{ env.PASSWORD_SECRET_LIST }}
+
+  #     - name: Bash - Install yq
+  #       run: |
+  #         sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.12.0/yq_linux_amd64
+  #         sudo chmod +x /usr/local/bin/yq
+
+  #     - name: Bicep - Template Validation
+  #       uses: azure/arm-deploy@v1
+  #       with:
+  #         scope: subscription
+  #         subscriptionId: ${{ secrets.HORTIVIEW_PRODUCTION_SUBSCRIPTIONID }}
+  #         region: ${{ env.AZURE_REGION }}
+  #         template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+  #         parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+  #         deploymentMode: Validate
+  #         deploymentName: ${{ env.PROD_DEPLOYMENT_NAME }}
+  #         failOnStdErr: false
+
+  #     - name: Bicep - Template Deployment
+  #       uses: azure/arm-deploy@v1
+  #       with:
+  #         scope: subscription
+  #         subscriptionId: ${{ secrets.HORTIVIEW_PRODUCTION_SUBSCRIPTIONID }}
+  #         region: ${{ env.AZURE_REGION }}
+  #         template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+  #         parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+  #         deploymentMode: Incremental
+  #         deploymentName: ${{ env.PROD_DEPLOYMENT_NAME }}
+  #         failOnStdErr: false
+
+  #     - name: Bash - Add App Settings
+  #       run: |
+  #         # Setting up global parameters
+  #         resource_group_name=$(printf "rg-%s-c-infra-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+  #         key_vault_name=$(printf "kv-%s-c-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+
+  #         # Get Key Vault URI
+  #         key_vault_uri=$(az keyvault show --name "$key_vault_name" --resource-group "$resource_group_name" --query properties.vaultUri -o tsv)
+
+  #         # Fetch all App Services in the specified resource group
+  #         app_services=$(az webapp list --resource-group "$resource_group_name" --query '[].name' --output tsv)
+
+  #         # Iterate over each App Service and set the specific environment variable
+  #         for app_service in ${app_services[@]}
+  #         do
+  #             az webapp config appsettings set --name "$app_service" --resource-group "$resource_group_name" --settings CodeBasedAppAuthentication="true" AzureKeyVaultUrl="$key_vault_uri" UseLocalAppsettings="false" ASPNETCORE_ENVIRONMENT="Production"
+  #         done
+
+  # deploy-to-devbox:
+  #   if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_devbox == 'true' }}
+  #   environment: devbox
+  #   needs: [build]
+  #   runs-on: [self-hosted, linux, external-k8s]
+  #   env:
+  #     BICEP_PARAMTERS_PATH: "environments/main-devbox.json"
+  #     ENVIRONMENT: "devbox"
+  #     PROJECT_NAME: "hv"
+  #   steps:
+  #     - name: Download Artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: ${{ env.ARTIFACT_NAME }}
+  #         path: ${{ env.ARTIFACT_NAME }}
+
+  #     - name: Az CLI login
+  #       uses: azure/login@v1
+  #       with:
+  #         client-id: ${{ secrets.HORTIVIEW_PLATFORM_PRODUCTION_CLIENTID }}
+  #         tenant-id: ${{ secrets.HORTIVIEW_TENANTID }}
+  #         subscription-id: ${{ secrets.HORTIVIEW_PRODUCTION_SUBSCRIPTIONID }}
+
+  #     - name: Bash - Set executable permissions to shell script
+  #       run: |
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_JSON_UPDATE_SCRIPT_PATH }}
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_KEYCLOAK_APP_PATH }}
+
+  #     - name: Bash - Create Instance Base by Azure CLI
+  #       run: |
+  #         ./${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+  #       env:
+  #         PROJECT_NAME: ${{ env.PROJECT_NAME }}
+  #         AZURE_REGION: ${{ env.AZURE_REGION }}
+  #         LOCATION_SHORTCUT: ${{ env.LOCATION_SHORTCUT }}
+  #         ENVIRONMENT: ${{ env.ENVIRONMENT }}
+  #         PASSWORD_SECRET_LIST: ${{ env.PASSWORD_SECRET_LIST }}
+
+  #     - name: Bash - Install yq
+  #       run: |
+  #         sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.12.0/yq_linux_amd64
+  #         sudo chmod +x /usr/local/bin/yq
+
+  #     - name: Bicep - Template Validation
+  #       uses: azure/arm-deploy@v1
+  #       with:
+  #         scope: subscription
+  #         subscriptionId: ${{ secrets.HORTIVIEW_PRODUCTION_SUBSCRIPTIONID }}
+  #         region: ${{ env.AZURE_REGION }}
+  #         template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+  #         parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+  #         deploymentMode: Validate
+  #         deploymentName: ${{ env.DEVBOX_DEPLOYMENT_NAME }}
+  #         failOnStdErr: false
+
+  #     - name: Bicep - Template Deployment
+  #       uses: azure/arm-deploy@v1
+  #       with:
+  #         scope: subscription
+  #         subscriptionId: ${{ secrets.HORTIVIEW_PRODUCTION_SUBSCRIPTIONID }}
+  #         region: ${{ env.AZURE_REGION }}
+  #         template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+  #         parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+  #         deploymentMode: Incremental
+  #         deploymentName: ${{ env.DEVBOX_DEPLOYMENT_NAME }}
+  #         failOnStdErr: false
+
+  #     - name: Bash - Add App Settings
+  #       run: |
+  #         # Setting up global parameters
+  #         resource_group_name=$(printf "rg-%s-c-infra-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+  #         key_vault_name=$(printf "kv-%s-c-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+
+  #         # Get Key Vault URI
+  #         key_vault_uri=$(az keyvault show --name "$key_vault_name" --resource-group "$resource_group_name" --query properties.vaultUri -o tsv)
+
+  #         # Fetch all App Services in the specified resource group
+  #         app_services=$(az webapp list --resource-group "$resource_group_name" --query '[].name' --output tsv)
+
+  #         # Iterate over each App Service and set the specific environment variable
+  #         for app_service in ${app_services[@]}
+  #         do
+  #             az webapp config appsettings set --name "$app_service" --resource-group "$resource_group_name" --settings CodeBasedAppAuthentication="true" AzureKeyVaultUrl="$key_vault_uri" UseLocalAppsettings="false" ASPNETCORE_ENVIRONMENT="Production"
+  #         done
+
+  # deploy-to-stag:
+  #   if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_stag == 'true' }}
+  #   environment: stag
+  #   needs: [build]
+  #   runs-on: [self-hosted, linux, external-k8s]
+  #   env:
+  #     BICEP_PARAMTERS_PATH: "environments/main-stag.json"
+  #     ENVIRONMENT: "stag"
+  #     PROJECT_NAME: "hv"
+  #   steps:
+  #     - name: Download Artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: ${{ env.ARTIFACT_NAME }}
+  #         path: ${{ env.ARTIFACT_NAME }}
+
+  #     - name: Az CLI login
+  #       uses: azure/login@v1
+  #       with:
+  #         client-id: ${{ secrets.HORTIVIEW_PLATFORM_STAGING_CLIENTID }}
+  #         tenant-id: ${{ secrets.HORTIVIEW_TENANTID }}
+  #         subscription-id: ${{ secrets.HORTIVIEW_STAGING_SUBSCRIPTIONID }}
+
+  #     - name: Bash - Set executable permissions to shell script
+  #       run: |
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_JSON_UPDATE_SCRIPT_PATH }}
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+  #         chmod +x ${{ env.ARTIFACT_NAME }}/${{ env.CLI_KEYCLOAK_APP_PATH }}
+
+  #     - name: Bash - Create Instance Base by Azure CLI
+  #       run: |
+  #         ./${{ env.ARTIFACT_NAME }}/${{ env.CLI_INSTANCE_SCRIPT_PATH }}
+  #       env:
+  #         PROJECT_NAME: ${{ env.PROJECT_NAME }}
+  #         AZURE_REGION: ${{ env.AZURE_REGION }}
+  #         LOCATION_SHORTCUT: ${{ env.LOCATION_SHORTCUT }}
+  #         ENVIRONMENT: ${{ env.ENVIRONMENT }}
+  #         PASSWORD_SECRET_LIST: ${{ env.PASSWORD_SECRET_LIST }}
+
+  #     # - name: Bash - Install yq
+  #     #   run: |
+  #     #     sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.12.0/yq_linux_amd64
+  #     #     sudo chmod +x /usr/local/bin/yq
+
+  #     # - name: Bicep - Template Validation
+  #     #   uses: azure/arm-deploy@v1
+  #     #   with:
+  #     #     scope: subscription
+  #     #     subscriptionId: ${{ secrets.HORTIVIEW_STAGING_SUBSCRIPTIONID }}
+  #     #     region: ${{ env.AZURE_REGION }}
+  #     #     template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+  #     #     parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+  #     #     deploymentMode: Validate
+  #     #     deploymentName: ${{ env.STAG_DEPLOYMENT_NAME }}
+  #     #     failOnStdErr: false
+
+  #     # - name: Bicep - Template Deployment
+  #     #   uses: azure/arm-deploy@v1
+  #     #   with:
+  #     #     scope: subscription
+  #     #     subscriptionId: ${{ secrets.HORTIVIEW_STAGING_SUBSCRIPTIONID }}
+  #     #     region: ${{ env.AZURE_REGION }}
+  #     #     template: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_TEMPLATE_PATH }}
+  #     #     parameters: ./${{ env.ARTIFACT_NAME }}/${{ env.BICEP_PARAMTERS_PATH }}
+  #     #     deploymentMode: Incremental
+  #     #     deploymentName: ${{ env.STAG_DEPLOYMENT_NAME }}
+  #     #     failOnStdErr: false
+
+  #     # - name: Bash - Add App Settings
+  #     #   run: |
+  #     #     # Setting up global parameters
+  #     #     resource_group_name=$(printf "rg-%s-c-infra-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+  #     #     key_vault_name=$(printf "kv-%s-c-%s-%s-001" "$PROJECT_NAME" "$ENVIRONMENT" "$LOCATION_SHORTCUT")
+
+  #     #     # Get Key Vault URI
+  #     #     key_vault_uri=$(az keyvault show --name "$key_vault_name" --resource-group "$resource_group_name" --query properties.vaultUri -o tsv)
+
+  #     #     # Fetch all App Services in the specified resource group
+  #     #     app_services=$(az webapp list --resource-group "$resource_group_name" --query '[].name' --output tsv)
+
+  #     #     # Iterate over each App Service and set the specific environment variable
+  #     #     for app_service in ${app_services[@]}
+  #     #     do
+  #     #         az webapp config appsettings set --name "$app_service" --resource-group "$resource_group_name" --settings CodeBasedAppAuthentication="true" AzureKeyVaultUrl="$key_vault_uri" UseLocalAppsettings="false" ASPNETCORE_ENVIRONMENT="Staging"
+  #     #     done

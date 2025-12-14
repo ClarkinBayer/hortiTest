@@ -1,0 +1,27 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"environment": {
+			"value": "dem"
+		},
+		"location": {
+			"value": "westeurope"
+		},
+		"logAnalyticsName": {
+			"value": "law-hv-m-spraying-dem-weu-01"
+		},
+		"appInsightsName": {
+			"value": "appi-hv-m-spraying-dem-weu-01"
+		},
+		"appServicePlanName": {
+			"value": "asp-hv-m-spraying-dem-weu-01"
+		},
+		"webAppName": {
+			"value": "app-hv-m-spraying-dem-weu-01"
+		},
+		"cosmosAccountName": {
+			"value": "cos-hv-m-spraying-dem-weu-01"
+		}
+	}
+}

@@ -1,0 +1,39 @@
+{
+    "apiVersion": "2025-02-01",
+    "id": "/subscriptions/d54fd796-90d9-4955-b6a4-cc4c139051bc/resourceGroups/rg-hv-m-spraying-tes-01/providers/Microsoft.OperationalInsights/workspaces/law-hv-m-spraying-tes-01",
+    "name": "law-hv-m-spraying-tes-01",
+    "type": "microsoft.operationalinsights/workspaces",
+    "location": "westeurope",
+    "tags": {
+        "application": "hv",
+        "environment": "tes",
+        "managed_by": "terraform",
+        "module": "spraying",
+        "region": "westeurope"
+    },
+    "properties": {
+        "customerId": "b028ad4f-91dd-4ad4-b845-77db1be1e4d6",
+        "provisioningState": "Succeeded",
+        "sku": {
+            "name": "PerGB2018",
+            "lastSkuUpdate": "2025-11-06T10:01:44.3941393Z"
+        },
+        "retentionInDays": 30,
+        "features": {
+            "legacy": 0,
+            "searchVersion": 1,
+            "enableLogAccessUsingOnlyResourcePermissions": true,
+            "disableLocalAuth": false
+        },
+        "workspaceCapping": {
+            "dailyQuotaGb": -1,
+            "quotaNextResetTime": "2025-11-07T00:00:00Z",
+            "dataIngestionStatus": "RespectQuota"
+        },
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled",
+        "createdDate": "2025-11-06T10:01:44.3941393Z",
+        "modifiedDate": "2025-11-06T11:35:49.5664904Z"
+    },
+    "etag": "\"a4041bb2-0000-0d00-0000-690c88150000\""
+}

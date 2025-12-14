@@ -1,0 +1,40 @@
+{
+    "apiVersion": "2020-02-02",
+    "id": "/subscriptions/d54fd796-90d9-4955-b6a4-cc4c139051bc/resourceGroups/rg-hv-m-spraying-tes-01/providers/Microsoft.Insights/components/appi-hv-m-spraying-tes-01",
+    "name": "appi-hv-m-spraying-tes-01",
+    "type": "microsoft.insights/components",
+    "kind": "web",
+    "location": "westeurope",
+    "tags": {
+        "application": "hv",
+        "environment": "tes",
+        "managed_by": "terraform",
+        "module": "spraying",
+        "region": "westeurope"
+    },
+    "properties": {
+        "ApplicationId": "appi-hv-m-spraying-tes-01",
+        "AppId": "17487a65-6799-4211-a005-30f31048db0a",
+        "Application_Type": "web",
+        "Flow_Type": null,
+        "Request_Source": null,
+        "InstrumentationKey": "9984e10b-2e01-4ab9-8dad-c7123beec040",
+        "ConnectionString": "InstrumentationKey=9984e10b-2e01-4ab9-8dad-c7123beec040;IngestionEndpoint=https://westeurope-5.in.applicationinsights.azure.com/;LiveEndpoint=https://westeurope.livediagnostics.monitor.azure.com/;ApplicationId=17487a65-6799-4211-a005-30f31048db0a",
+        "Name": "appi-hv-m-spraying-tes-01",
+        "CreationDate": "2025-11-06T11:36:11.3481547Z",
+        "TenantId": "d54fd796-90d9-4955-b6a4-cc4c139051bc",
+        "provisioningState": "Succeeded",
+        "SamplingPercentage": 100,
+        "RetentionInDays": 90,
+        "Retention": "P90D",
+        "DisableIpMasking": false,
+        "WorkspaceResourceId": "/subscriptions/d54fd796-90d9-4955-b6a4-cc4c139051bc/resourceGroups/rg-hv-m-spraying-tes-01/providers/Microsoft.OperationalInsights/workspaces/law-hv-m-spraying-tes-01",
+        "IngestionMode": "LogAnalytics",
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled",
+        "DisableLocalAuth": false,
+        "ForceCustomerStorageForProfiler": false,
+        "Ver": "v2"
+    },
+    "etag": "\"f0097dec-0000-0200-0000-69377a5b0000\""
+}
