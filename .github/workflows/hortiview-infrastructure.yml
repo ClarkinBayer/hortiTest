@@ -64,7 +64,7 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     env:
-      BICEP_PARAMTERS_PATH: "environments/main-test.json"
+      BICEP_PARAMTERS_PATH: "environments/main-demo.json"
       ENVIRONMENT: "tes"
       PROJECT_NAME: "hv"
     steps:
