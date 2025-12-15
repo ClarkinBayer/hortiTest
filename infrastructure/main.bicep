@@ -15,6 +15,11 @@ param appServicePlanName string
 param webAppName string
 param cosmosAccountName string
 
+param mongoDatabaseName string
+param collection1Name string
+param collection2Name string
+param sharedAutoscaleMaxThroughput int = 4000
+param dedicatedAutoscaleMaxThroughput int = 8000
 module logAnalytics './modules/log_analytics_workspace.bicep' = {
   name: 'logAnalytics'
   params: {
@@ -58,9 +63,11 @@ module cosmos './modules/cosmos_db.bicep' = {
   name: 'cosmos'
   params: {
     cosmosAccountName: cosmosAccountName
-    mongoDatabaseName: 'hv-db'
-    collection1Name: 'products'
-    collection2Name: 'orders'
+    mongoDatabaseName: mongoDatabaseName
+    collection1Name: collection1Name
+    collection2Name: collection2Name
+    sharedAutoscaleMaxThroughput: sharedAutoscaleMaxThroughput
+    dedicatedAutoscaleMaxThroughput: dedicatedAutoscaleMaxThroughput
     location: location
     tags: tags
   }
