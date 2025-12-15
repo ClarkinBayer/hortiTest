@@ -1,5 +1,5 @@
-param location string = 'westeurope'
-param environment string = 'tes'
+param location string
+param environment string
 
 param tags object = {
   application: 'hv'
@@ -15,7 +15,6 @@ param appServicePlanName string
 param webAppName string
 param cosmosAccountName string
 
-// Log Analytics
 module logAnalytics './modules/log_analytics_workspace.bicep' = {
   name: 'logAnalytics'
   params: {
@@ -25,7 +24,6 @@ module logAnalytics './modules/log_analytics_workspace.bicep' = {
   }
 }
 
-// Application Insights
 module appInsights './modules/application_insights.bicep' = {
   name: 'appInsights'
   params: {
@@ -36,7 +34,6 @@ module appInsights './modules/application_insights.bicep' = {
   }
 }
 
-// App Service Plan
 module appServicePlan './modules/app_service_plan.bicep' = {
   name: 'appServicePlan'
   params: {
@@ -46,7 +43,6 @@ module appServicePlan './modules/app_service_plan.bicep' = {
   }
 }
 
-// Web App
 module webApp './modules/webapp.bicep' = {
   name: 'webApp'
   params: {
@@ -58,11 +54,13 @@ module webApp './modules/webapp.bicep' = {
   }
 }
 
-// Cosmos DB (Mongo)
 module cosmos './modules/cosmos_db.bicep' = {
   name: 'cosmos'
   params: {
     cosmosAccountName: cosmosAccountName
+    mongoDatabaseName: 'hv-db'
+    collection1Name: 'products'
+    collection2Name: 'orders'
     location: location
     tags: tags
   }
